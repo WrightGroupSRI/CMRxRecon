@@ -69,16 +69,14 @@ def fit_basis_at_index(x, y, z, rcn, TB):
     imag_lr.fit(np.imag(T), np.imag(X))
     return (x, y, z, real_lr.coef_ + 1j * imag_lr.coef_)
 
-def write_basis(spatial_basis=None, temporal_basis=None, path=None):
+def write_basis(spatial_basis=None, temporal_basis=None, path=None, contrast="T1"):
     # TODO figure out how to write mat73 files
     out = {}
     out["spatial_basis"] = spatial_basis 
     out["temporal_basis"] = temporal_basis
-    savemat(os.path.join(path, "spatiotemporal_basis"), out)
+    savemat(os.path.join(path, f"spatiotemporal_basis_{contrast}"), out)
     return True
   
-
-    
 if __name__ == '__main__':
     fully_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
     data = mat73.loadmat(fully_sampled_path)['kspace_single_full']

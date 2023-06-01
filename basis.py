@@ -60,7 +60,7 @@ def spatial_basis(X_under, TB):
     return basis
 
 def fit_basis_at_index(x, y, z, rcn, TB):
-    print(x, y, z, end="\r"
+    print("Processing entry", x, y, z, end="\r")
     X = rcn[x, y, z, :]
     T = TB[z]
     real_lr = linear_model.LinearRegression()
@@ -74,7 +74,7 @@ def write_basis(spatial_basis=None, temporal_basis=None, path=None):
     out = {}
     out["spatial_basis"] = spatial_basis 
     out["temporal_basis"] = temporal_basis
-    savemat("spatiotemporal_basis", out)
+    savemat(os.path.join(path, "spatiotemporal_basis"), out)
     return True
   
 
@@ -90,6 +90,9 @@ if __name__ == '__main__':
     TB = temporal_basis(under_data)
 
     SB = spatial_basis(under_data, TB)
+    SB_full = spatial_basis(data, TB)
+    write_basis(spatial_basis=SB, temporal_basis=TB, path="/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/AccFactor04/P001/")
+    write_basis(spatial_basis=SB_full, temporal_basis=TB, path="/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/")
     # cfl.writecfl("spatial_basis", SB)
 
 

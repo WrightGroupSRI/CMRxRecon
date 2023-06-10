@@ -22,6 +22,7 @@ from sklearn import linear_model
 # pip install mat73
 # todo add h5py import from CMRxRecon github
 import mat73
+import hdf5storage as hf
 from scipy.io import loadmat, savemat
 # import cfl
 
@@ -70,28 +71,30 @@ def fit_basis_at_index(x, y, z, rcn, TB):
     return (x, y, z, real_lr.coef_ + 1j * imag_lr.coef_)
 
 def write_basis(spatial_basis=None, temporal_basis=None, path=None, contrast="T1"):
-    # TODO figure out how to write mat73 files
     out = {}
     out["spatial_basis"] = spatial_basis 
     out["temporal_basis"] = temporal_basis
-    savemat(os.path.join(path, f"spatiotemporal_basis_{contrast}"), out)
+    writemat(key="spatial_basis", data=spatial_basis, path=os.path.join(path, "spatial_basis.mat"))
+    writemat(key="temporal_basis", data=temporal_basis, path=os.path.join(path, "temporal_basis.mat"))
+    return True
+
+def writemat(key=None, data=None, path=None)
+    hf.write(data, path=f"/{key}", filename=path)
     return True
   
 if __name__ == '__main__':
     fully_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
     data = mat73.loadmat(fully_sampled_path)['kspace_single_full']
     fft_recon = ifft(data)
-    # cfl.writecfl("fft_recon", fft_recon)
 
     under_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/AccFactor04/P001/T1map.mat"
     under_data = mat73.loadmat(under_sampled_path)['kspace_single_sub04']
     TB = temporal_basis(under_data)
-
     SB = spatial_basis(under_data, TB)
     SB_full = spatial_basis(data, TB)
+
     write_basis(spatial_basis=SB, temporal_basis=TB, path="/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/AccFactor04/P001/")
     write_basis(spatial_basis=SB_full, temporal_basis=TB, path="/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/")
-    # cfl.writecfl("spatial_basis", SB)
 
 
         

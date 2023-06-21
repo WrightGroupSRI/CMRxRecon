@@ -78,16 +78,16 @@ def write_basis(spatial_basis=None, temporal_basis=None, path=None, contrast="T1
     writemat(key="temporal_basis", data=temporal_basis, path=os.path.join(path, "temporal_basis.mat"))
     return True
 
-def writemat(key=None, data=None, path=None)
+def writemat(key=None, data=None, path=None):
     hf.write(data, path=f"/{key}", filename=path)
     return True
   
 if __name__ == '__main__':
-    fully_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
+    fully_sampled_path = "/home/kadotab/projects/def-mchiew/kadotab/SingleCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
     data = mat73.loadmat(fully_sampled_path)['kspace_single_full']
     fft_recon = ifft(data)
 
-    under_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/AccFactor04/P001/T1map.mat"
+    under_sampled_path = "/home/kadotab/projects/def-mchiew/kadotab/SingleCoil/Mapping/TrainingSet/AccFactor04/P001/T1map.mat"
     under_data = mat73.loadmat(under_sampled_path)['kspace_single_sub04']
     TB = temporal_basis(under_data)
     SB = spatial_basis(under_data, TB)

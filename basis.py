@@ -19,12 +19,8 @@ import os
 import sys
 from sklearn import linear_model
 
-# pip install mat73
-# todo add h5py import from CMRxRecon github
-import mat73
-import hdf5storage as hf
-from scipy.io import loadmat, savemat
-# import cfl
+import h5py
+import scipy.io as scio
 
 
 def ifft(X):
@@ -78,17 +74,43 @@ def write_basis(spatial_basis=None, temporal_basis=None, path=None, contrast="T1
     writemat(key="temporal_basis", data=temporal_basis, path=os.path.join(path, "temporal_basis.mat"))
     return True
 
-def writemat(key=None, data=None, path=None)
-    hf.write(data, path=f"/{key}", filename=path)
+
+def loadmat(key=None, path=None):
+    # 读取.mat 文件
+    # mat_file = scio.loadmat(path)
+    # # 获取数据集
+    # dataset = mat_file['img4ranking']
+    try:
+        # 尝试使用scipy.io.loadmat打开MAT文件
+        mat_file = scio.loadmat(path)
+        # 访问MAT文件中的数据
+        dataset = mat_file[k]
+        print("MAT file opened successfully using scipy.io.loadmat.")
+    except NotImplementedError:
+        try:
+            # 尝试使用h5py打开MAT文件
+            with h5py.File(path, 'r') as f:
+                # 访问MAT文件中的数据
+                dataset = f[k][:]
+            print("MAT file opened successfully using h5py.")
+        except Exception as e:
+            print("Failed to open MAT file:", str(e))
+
+    return dataset
+
+
+def writemat(key=None, data=None, path=None):
+    with h5py.File(path, "w") as f:
+        dset = f.create_dataset(key, data.shape, dtype=data.dtype)
     return True
   
 if __name__ == '__main__':
     fully_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
-    data = mat73.loadmat(fully_sampled_path)['kspace_single_full']
+    data = loadmat(key='kspace_single_full', path=fully_sampled_path)
     fft_recon = ifft(data)
 
     under_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/AccFactor04/P001/T1map.mat"
-    under_data = mat73.loadmat(under_sampled_path)['kspace_single_sub04']
+    under_data = loadmat(key='kspace_single_sub04', path=under_sampled_path)
     TB = temporal_basis(under_data)
     SB = spatial_basis(under_data, TB)
     SB_full = spatial_basis(data, TB)

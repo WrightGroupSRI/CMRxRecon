@@ -23,9 +23,6 @@ import h5py
 import scipy.io as scio
 
 
-def ifft(X):
-    return np.fft.fftshift(np.fft.ifftn(np.fft.fftshift(X, axes=(0, 1)), axes=(0, 1)), axes=(0, 1))
-
 def temporal_basis(K):
     shx, shy, shz, sht = K.shape
     ACS_mask = np.zeros_like(data, dtype=int)
@@ -33,7 +30,7 @@ def temporal_basis(K):
 
 
     ACS_data = ACS_mask * K
-    low_image = ifft(ACS_data)
+    low_image = ifft2c(ACS_data)
     Casorati = low_image.reshape(shx * shy, shz, sht)
     basis = np.zeros((shz, sht, sht), dtype=complex)
 
@@ -44,7 +41,7 @@ def temporal_basis(K):
     return basis
 
 def spatial_basis(X_under, TB):
-    rcn = ifft(X_under)
+    rcn = ifft2c(X_under)
     shx, shy, shz, sht = rcn.shape
     basis = np.zeros_like(rcn)
     args = [(x, y, z, rcn, TB) for x in range(shx) for y in range(shy) for z in range(shz)]
@@ -84,20 +81,44 @@ def loadmat(key=None, path=None):
         # 尝试使用scipy.io.loadmat打开MAT文件
         mat_file = scio.loadmat(path)
         # 访问MAT文件中的数据
-        dataset = mat_file[k]
+        dataset = mat_file[key]
         print("MAT file opened successfully using scipy.io.loadmat.")
     except NotImplementedError:
         try:
             # 尝试使用h5py打开MAT文件
             with h5py.File(path, 'r') as f:
                 # 访问MAT文件中的数据
-                dataset = f[k][:]
+                dataset = f[key][:]
             print("MAT file opened successfully using h5py.")
         except Exception as e:
             print("Failed to open MAT file:", str(e))
 
-    return dataset
+    ds = dataset['real'] + 1j * dataset['imag']
+    sht, shz, shy, shx = ds.shape
+    ds = ds.reshape((shx, shy, shz, sht))
+    return ds
 
+def ifft2c(x):
+    # 获取 x 的 shape
+    S = np.shape(x)
+
+    # 计算缩放因子
+    fctr = S[0] * S[1]
+
+    # 重塑 x
+    x = np.reshape(x, (S[0], S[1], np.prod(S[2:])))
+
+    # 初始化结果数组
+    res = np.zeros(np.shape(x), dtype=complex)
+
+    # 对每一个通道执行二维傅立叶逆变换
+    for n in range(np.shape(x)[2]):
+        res[:,:,n] = np.sqrt(fctr) * np.fft.ifftshift(np.fft.ifft2(np.fft.fftshift(x[:,:,n])))
+
+    # 重塑结果数组
+    res = np.reshape(res, S)
+
+    return res
 
 def writemat(key=None, data=None, path=None):
     with h5py.File(path, "w") as f:
@@ -107,7 +128,7 @@ def writemat(key=None, data=None, path=None):
 if __name__ == '__main__':
     fully_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
     data = loadmat(key='kspace_single_full', path=fully_sampled_path)
-    fft_recon = ifft(data)
+    fft_recon = ifft2c(data)
 
     under_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/AccFactor04/P001/T1map.mat"
     under_data = loadmat(key='kspace_single_sub04', path=under_sampled_path)

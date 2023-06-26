@@ -55,9 +55,13 @@ def recon_espirit(array, path=None, save_recon= None, contrast= 'T1'):
     if save_recon==True:
         if not os.path.exists(f"{path}/"):
             os.makedirs(f"{path}/")
-        write_recon(maps=maps_, espirit= np.flip(recon_p, axis = [1,2]), path=path, contrast=contrast)
-        #cfl.writecfl(f"{path}/recon_E", np.flip(recon_p, axis = [1,2]))
-
+        
+        maps_= np.expand_dims(np.squeeze(maps_), axis = -1)
+        recon_p = np.transpose(np.expand_dims(np.squeeze(recon_p), axis = 2), [0,1,2,4,3])
+        write_recon(maps=maps_, espirit= np.flip(recon_p, axis = [0,1]), path=path, contrast=contrast)
+        cfl.writecfl(f"{path}/recon_E", np.flip(recon_p, axis = [0,1]))
+      
+ 
 
 # Main function
 if __name__ == '__main__':

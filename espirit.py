@@ -59,7 +59,7 @@ def recon_espirit(array, path=None, save_recon= None, contrast= 'T1'):
         maps_= np.expand_dims(np.squeeze(maps_), axis = -1)
         recon_p = np.transpose(np.expand_dims(np.squeeze(recon_p), axis = 2), [0,1,2,4,3])
         write_recon(maps=maps_, espirit= np.flip(recon_p, axis = [0,1]), path=path, contrast=contrast)
-        cfl.writecfl(f"{path}/recon_E", np.flip(recon_p, axis = [0,1]))
+        cfl.writecfl(f"{path}/{contrast}recon_E", np.flip(recon_p, axis = [0,1]))
       
  
 

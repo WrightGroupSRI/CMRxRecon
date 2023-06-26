@@ -3,7 +3,7 @@ FROM pytorch/pytorch
 
 LABEL maintainer="calder.sheagren@mail.utoronto.ca"
 LABEL version="0.01"
-LABEL description="CMRxRecon Sunnybrook Submission"
+LABEL description="DSL-PILLAR Reconstruction: CMRxRecon Sunnybrook Submission"
 
 WORKDIR /workspace
 

@@ -32,7 +32,7 @@ def ifft(X):
 
 def temporal_basis(K):
     shx, shy, shz, sht = K.shape
-    ACS_mask = np.zeros_like(data, dtype=int)
+    ACS_mask = np.zeros_like(K, dtype=int)
     ACS_mask[:, shy // 2 - 12:shy // 2 + 12, :, :] = 1
 
 

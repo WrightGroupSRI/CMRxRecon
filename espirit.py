@@ -17,6 +17,8 @@ import cfl
 
 from io import loadmat, writemat
 
+__all__ = ['espirit']
+
 # Prepare data for BART processing
 def prep_bart(fft_recon):
     dim = 6
@@ -48,7 +50,7 @@ def maps(array):
 
 
 # Function for ESPIRiT reconstruction
-def recon_espirit(array, path=None, save_recon= None, contrast= 'T1'):
+def espirit(array, path=None, save_recon= None, contrast= 'T1'):
     maps_,fft_b = maps(array)
     recon_p = bart(1,'pics -e  -g -i 100 -R W:6:0:0.05',fft_b,maps_)
     
@@ -67,4 +69,4 @@ def recon_espirit(array, path=None, save_recon= None, contrast= 'T1'):
 if __name__ == '__main__':
     data_path = "/home/jay/condor/CMRxRecon/MultiCoil/Mapping/TrainingSet/AccFactor04/P001/T1map.mat"
     data = loadmat(key='kspace_sub04', path=data_path)
-    recon_espirit(data, path = f'{os.path.dirname(data_path)}/espirit_recon/', save_recon= True, contrast = os.path.basename(data_path)[0:2] )
+    espirit(data, path = f'{os.path.dirname(data_path)}/espirit_recon/', save_recon= True, contrast = os.path.basename(data_path)[0:2] )

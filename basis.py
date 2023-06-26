@@ -21,6 +21,8 @@ from sklearn import linear_model
 
 from io import loadmat, writemat
 
+__all__ = ['spatial_basis', 'temporal_basis']
+
 def temporal_basis(K):
     shx, shy, shz, sht = K.shape
     ACS_mask = np.zeros_like(data, dtype=int)

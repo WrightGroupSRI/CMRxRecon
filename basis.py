@@ -19,12 +19,7 @@ import os
 import sys
 from sklearn import linear_model
 
-import mat73
-import hdf5storage as hf
-import scipy.io as scio
-
-VERBOSE = True
-
+from io import loadmat, writemat
 
 def temporal_basis(K):
     shx, shy, shz, sht = K.shape
@@ -75,11 +70,6 @@ def write_basis(spatial_basis=None, temporal_basis=None, path=None, contrast="T1
     return True
 
 
-def loadmat(key=None, path=None):
-    data = mat73.loadmat(path)
-    array = data.get(key)
-    return array
-
 def ifft2c(x):
     # 获取 x 的 shape
     S = np.shape(x)
@@ -102,20 +92,9 @@ def ifft2c(x):
 
     return res
 
-def writemat(key=None, data=None, path=None):
-    assert(key), "Please pass in key"
-    assert(data.ndim > 0), "Please pass in data"
-    assert(path), "Please pass in path"
-    hf.savemat(path, {key:data}, appendmat=False)
-    return path
-  
 if __name__ == '__main__':
     fully_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
     data = loadmat(key='kspace_single_full', path=fully_sampled_path)
-
-    # writepath = writemat(key='kspace_single_full', data=data, path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/T1map_write.mat")
-    # data_read = loadmat(key='kspace_single_full', path=writepath)
-    # print(np.allclose(data, data_read))
 
     fft_recon = ifft2c(data)
 

@@ -13,16 +13,10 @@
 from pyforest import *
 from bart import bart
 import scipy.io
-import mat73
 import cfl
-import hdf5storage as hf
 
-# Function to load MATLAB data
-def loadmat(key=None, path=None):
-    data = mat73.loadmat(path)
-    array = data.get(key)
-    return array
-    
+from io import loadmat, writemat
+
 # Prepare data for BART processing
 def prep_bart(fft_recon):
     dim = 6
@@ -30,14 +24,6 @@ def prep_bart(fft_recon):
         (np.expand_dims(np.expand_dims(np.transpose(np.expand_dims(fft_recon, axis=0), [0, 1, 2, 3, 5, 4]), axis=4), 
             axis=dim-1), axis=dim+1), axis=dim+1), axis=dim+1), axis=dim+1), axis=dim+1), axis=dim+1), axis=dim+1)
     return array
-
-# Function to write data to MATLAB .mat file
-def writemat(key=None, data=None, path=None):
-    assert(key), "Please pass in key"
-    assert(data.ndim > 0), "Please pass in data"
-    assert(path), "Please pass in path"
-    hf.savemat(path, {key:data}, appendmat=False)
-    return path
 
 # Function to write reconstructed images and maps to .mat files
 def write_recon(maps=None, espirit=None, path=None, contrast="T1"):

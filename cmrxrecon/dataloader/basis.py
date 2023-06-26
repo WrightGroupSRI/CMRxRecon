@@ -19,16 +19,9 @@ import os
 import sys
 from sklearn import linear_model
 
-# pip install mat73
-# todo add h5py import from CMRxRecon github
-import mat73
-import hdf5storage as hf
-from scipy.io import loadmat, savemat
-# import cfl
+from io import loadmat, writemat
 
-
-def ifft(X):
-    return np.fft.fftshift(np.fft.ifftn(np.fft.fftshift(X, axes=(0, 1)), axes=(0, 1)), axes=(0, 1))
+__all__ = ['spatial_basis', 'temporal_basis']
 
 def temporal_basis(K):
     shx, shy, shz, sht = K.shape
@@ -37,7 +30,7 @@ def temporal_basis(K):
 
 
     ACS_data = ACS_mask * K
-    low_image = ifft(ACS_data)
+    low_image = ifft2c(ACS_data)
     Casorati = low_image.reshape(shx * shy, shz, sht)
     basis = np.zeros((shz, sht, sht), dtype=complex)
 
@@ -48,7 +41,7 @@ def temporal_basis(K):
     return basis
 
 def spatial_basis(X_under, TB):
-    rcn = ifft(X_under)
+    rcn = ifft2c(X_under)
     shx, shy, shz, sht = rcn.shape
     basis = np.zeros_like(rcn)
     args = [(x, y, z, rcn, TB) for x in range(shx) for y in range(shy) for z in range(shz)]
@@ -78,25 +71,42 @@ def write_basis(spatial_basis=None, temporal_basis=None, path=None, contrast="T1
     writemat(key="temporal_basis", data=temporal_basis, path=os.path.join(path, "temporal_basis.mat"))
     return True
 
-def writemat(key=None, data=None, path=None):
-    hf.write(data, path=f"/{key}", filename=path)
-    return True
-  
-if __name__ == '__main__':
-    fully_sampled_path = "/home/kadotab/projects/def-mchiew/kadotab/SingleCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
-    data = mat73.loadmat(fully_sampled_path)['kspace_single_full']
-    fft_recon = ifft(data)
 
-    under_sampled_path = "/home/kadotab/projects/def-mchiew/kadotab/SingleCoil/Mapping/TrainingSet/AccFactor04/P001/T1map.mat"
-    under_data = mat73.loadmat(under_sampled_path)['kspace_single_sub04']
+def ifft2c(x):
+    # 获取 x 的 shape
+    S = np.shape(x)
+
+    # 计算缩放因子
+    fctr = S[0] * S[1]
+
+    # 重塑 x
+    x = np.reshape(x, (S[0], S[1], np.prod(S[2:])))
+
+    # 初始化结果数组
+    res = np.zeros(np.shape(x), dtype=complex)
+
+    # 对每一个通道执行二维傅立叶逆变换
+    for n in range(np.shape(x)[2]):
+        res[:,:,n] = np.sqrt(fctr) * np.fft.ifftshift(np.fft.ifft2(np.fft.fftshift(x[:,:,n])))
+
+    # 重塑结果数组
+    res = np.reshape(res, S)
+
+    return res
+
+if __name__ == '__main__':
+    fully_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
+    data = loadmat(key='kspace_single_full', path=fully_sampled_path)
+
+    fft_recon = ifft2c(data)
+
+    under_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/AccFactor04/P001/T1map.mat"
+    under_data = loadmat(key='kspace_single_sub04', path=under_sampled_path)
+
     TB = temporal_basis(under_data)
     SB = spatial_basis(under_data, TB)
     SB_full = spatial_basis(data, TB)
 
     write_basis(spatial_basis=SB, temporal_basis=TB, path="/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/AccFactor04/P001/")
     write_basis(spatial_basis=SB_full, temporal_basis=TB, path="/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/")
-
-
-        
-
 

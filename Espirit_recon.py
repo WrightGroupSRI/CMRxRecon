@@ -44,8 +44,8 @@ def write_recon(maps=None, espirit=None, path=None, contrast="T1"):
     out = {}
     out["maps"] = maps 
     out["recon"] = espirit
-    writemat(key="maps", data=maps, path=os.path.join(path, "maps.mat"))
-    writemat(key="recon", data=espirit, path=os.path.join(path, "recon_E.mat"))
+    writemat(key="maps", data=maps, path=os.path.join(path, f"{contrast}maps.mat"))
+    writemat(key="recon", data=espirit, path=os.path.join(path, f"{contrast}recon_E.mat"))
     return True
 
 # Function to estimate maps 
@@ -62,18 +62,19 @@ def maps(array):
 
 
 # Function for ESPIRiT reconstruction
-def recon_espirit(array, path=None, save_recon= None):
+def recon_espirit(array, path=None, save_recon= None, contrast= 'T1'):
     maps_,fft_b = maps(array)
     recon_p = bart(1,'pics -e  -g -i 100 -R W:6:0:0.05',fft_b,maps_)
     
     if save_recon==True:
-        if not os.path.exists(f"{path}/espirit_recon/"):
-            os.makedirs(f"{path}/espirit_recon/")
-        write_recon(maps=maps_, espirit= np.flip(recon_p, axis = [1,2]), path=path)
+        if not os.path.exists(f"{path}/"):
+            os.makedirs(f"{path}/")
+        write_recon(maps=maps_, espirit= np.flip(recon_p, axis = [1,2]), path=path, contrast=contrast)
+        #cfl.writecfl(f"{path}/recon_E", np.flip(recon_p, axis = [1,2]))
 
 
 # Main function
 if __name__ == '__main__':
-    data_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
-    data = loadmat(key='kspace_full', path=data_path)
-    recon_espirit(data, path = os.path.dirname(data_path), save_recon= True)
+    data_path = "/home/jay/condor/CMRxRecon/MultiCoil/Mapping/TrainingSet/AccFactor04/P001/T1map.mat"
+    data = loadmat(key='kspace_sub04', path=data_path)
+    recon_espirit(data, path = f'{os.path.dirname(data_path)}/espirit_recon/', save_recon= True, contrast = os.path.basename(data_path)[0:2] )

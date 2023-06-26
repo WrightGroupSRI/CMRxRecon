@@ -22,6 +22,7 @@ from sklearn import linear_model
 from matio import loadmat, writemat
 
 import time
+from cmrxrecon.io import loadmat, writemat
 
 __all__ = ['spatial_basis', 'temporal_basis']
 
@@ -56,8 +57,7 @@ def spatial_basis(X_under, TB, num_workers=os.cpu_count()):
     return basis
 
 def fit_basis_at_index(x, y, z, rcn, TB):
-    print("Processing entry", x, y, z, end="\r")
-    X = rcn[x, y, :, z]
+    X = rcn[x, y, z, :]
     T = TB[z]
     real_lr = linear_model.LinearRegression()
     real_lr.fit(np.real(T), np.real(X))
@@ -96,21 +96,31 @@ def ifft2c(x):
 
     return res
 
-if __name__ == '__main__':
-    print("Running basis computation")
-    fully_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
-    data = loadmat(key='kspace_single_full', path=fully_sampled_path)
+def build_basis_dir(dir_path, key):
+    sub_dirs = os.listdir(dir_path)
+    for sub_dir in sub_dirs:
+        if os.path.isfile(os.path.join(dir_path, sub_dir)):
+            continue
+        path = os.path.join(dir_path, sub_dir, 'T1map.mat')
+        print(f'Running file {path}')
+        data = loadmat(key=key, path=path)
 
-    fft_recon = ifft2c(data)
+        TB = temporal_basis(data)
+        SB = spatial_basis(data, TB)
+        try: 
+            os.makedirs(os.path.join('/home/kadotab/scratch/dataset', key, sub_dir))
+        except:
+            pass
+        write_basis(spatial_basis=SB, temporal_basis=TB, path=os.path.join('/home/kadotab/scratch/dataset/', key, sub_dir))
 
-    under_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/AccFactor04/P001/T1map.mat"
-    under_data = loadmat(key='kspace_single_sub04', path=under_sampled_path)
+if __name__ == "__main__":  
+    dir_data ='/home/kadotab/projects/def-mchiew/kadotab/SingleCoil/Mapping/TrainingSet' 
+    dir_fully_sampled = (os.path.join(dir_data, 'FullSample'))
+    dir_04_sampled = (os.path.join(dir_data, 'AccFactor04'))
+    dir_08_sampled = (os.path.join(dir_data, 'AccFactor08'))
+    dir_10_sampled = (os.path.join(dir_data, 'AccFactor10'))
 
-    TB = temporal_basis(under_data)
-
-    SB = spatial_basis(under_data, TB)
-    SB_full = spatial_basis(data, TB)
-
-    write_basis(spatial_basis=SB, temporal_basis=TB, path="/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/AccFactor04/P001/")
-    write_basis(spatial_basis=SB_full, temporal_basis=TB, path="/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/")
-
+    #build_basis_dir(dir_fully_sampled, 'kspace_single_full')
+    build_basis_dir(dir_04_sampled, 'kspace_single_sub04')
+    #build_basis_dir(dir_08_sampled, 'kspace_single_sub08')
+    #build_basis_dir(dir_10_sampled, 'kspace_single_sub10')

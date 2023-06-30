@@ -21,6 +21,8 @@ from sklearn import linear_model
 
 from matio import loadmat, writemat
 
+import time
+
 __all__ = ['spatial_basis', 'temporal_basis']
 
 def temporal_basis(K):
@@ -40,12 +42,12 @@ def temporal_basis(K):
 
     return basis
 
-def spatial_basis(X_under, TB):
+def spatial_basis(X_under, TB, num_workers=os.cpu_count()):
     rcn = ifft2c(X_under)
     shx, shy, shz, sht = rcn.shape
     basis = np.zeros_like(rcn)
     args = [(x, y, z, rcn, TB) for x in range(shx) for y in range(shy) for z in range(shz)]
-    with Pool(5) as p:
+    with Pool(processes=num_workers) as p:
         results = p.starmap(fit_basis_at_index, args)
     for r in results:
         x, y, z, B = r
@@ -54,7 +56,7 @@ def spatial_basis(X_under, TB):
     return basis
 
 def fit_basis_at_index(x, y, z, rcn, TB):
-    print("Processing entry", x, y, z, end="\r")
+    # print("Processing entry", x, y, z, end="\r")
     X = rcn[x, y, z, :]
     T = TB[z]
     real_lr = linear_model.LinearRegression()
@@ -95,6 +97,7 @@ def ifft2c(x):
     return res
 
 if __name__ == '__main__':
+    print("Running basis computation")
     fully_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
     data = loadmat(key='kspace_single_full', path=fully_sampled_path)
 
@@ -104,6 +107,7 @@ if __name__ == '__main__':
     under_data = loadmat(key='kspace_single_sub04', path=under_sampled_path)
 
     TB = temporal_basis(under_data)
+
     SB = spatial_basis(under_data, TB)
     SB_full = spatial_basis(data, TB)
 

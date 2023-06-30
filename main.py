@@ -13,7 +13,7 @@
 import os
 import argparse
 
-from io import *
+from matio import *
 from basis import *
 from espirit import *
 

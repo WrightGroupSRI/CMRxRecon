@@ -19,7 +19,7 @@ import os
 import sys
 from sklearn import linear_model
 
-from io import loadmat, writemat
+from matio import loadmat, writemat
 
 __all__ = ['spatial_basis', 'temporal_basis']
 

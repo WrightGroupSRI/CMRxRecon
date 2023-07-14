@@ -15,7 +15,7 @@ from bart import bart
 import scipy.io
 import cfl
 
-from io import loadmat, writemat
+from matio import loadmat, writemat
 
 __all__ = ['espirit']
 

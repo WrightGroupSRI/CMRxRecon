@@ -66,6 +66,13 @@ if __name__ == '__main__':
             T2map = os.path.join(pt_path, 'T2map.mat') 
 
             # Process T1 map, T2 map
+            for path in [T1map, T2map]:
+                data = loadmat(key=f'kspace_sub{a}', path=path)
+
+                TB = temporal_basis(data) 
+                espirit_recon = espirit(data)
+                SB = spatial_basis(espirit_recon, TB)
+
 
             # Export processed data
             os.system(f"touch {os.path.join(pt_path_submission, 'T1map.mat')}")

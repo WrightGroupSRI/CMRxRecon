@@ -40,9 +40,10 @@ def write_recon(maps=None, espirit=None, path=None, contrast="T1"):
 def maps(array):
     sh_ = np.shape(array)
     fft_b = prep_bart(array)
-    m_ = np.zeros([1,sh_[0],sh_[1],sh_[2],sh_[3]])
+    m_ = np.zeros([1,sh_[0],sh_[1],sh_[2],sh_[3]], dtype=np.complex_)
     for i in range(0,sh_[-2]):
-        m_[...,i] = bart(1, 'ecalib -d3 -g -S -m1 -a -r1:48:9', fft_b[...,i])
+        # change to add gpu
+        m_[...,i] = bart(1, 'ecalib -d3 -S -m1 -a -r1:48:9', fft_b[...,i])
     maps_ = prep_bart(np.transpose(m_, [1,2,3,4,0]))
     
   
@@ -52,7 +53,10 @@ def maps(array):
 # Function for ESPIRiT reconstruction
 def espirit(array, path=None, save_recon= None, contrast= 'T1'):
     maps_,fft_b = maps(array)
-    recon_p = bart(1,'pics -e  -g -i 100 -R W:6:0:0.05',fft_b,maps_)
+    # change to 100 iterations
+    # change to add gpu
+    # make sure regularizer is doing what we think it is
+    recon_p = bart(1,'pics -e -i 1 -d 5 -R W:6:0:0.05',fft_b,maps_)
     
     if save_recon==True:
         if not os.path.exists(f"{path}/"):
@@ -63,6 +67,7 @@ def espirit(array, path=None, save_recon= None, contrast= 'T1'):
         write_recon(maps=maps_, espirit= np.flip(recon_p, axis = [0,1]), path=path, contrast=contrast)
         cfl.writecfl(f"{path}/{contrast}recon_E", np.flip(recon_p, axis = [0,1]))
       
+    return np.squeeze(recon_p)
  
 
 # Main function

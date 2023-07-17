@@ -26,12 +26,12 @@ import time
 __all__ = ['spatial_basis', 'temporal_basis']
 
 def temporal_basis(K):
-    shx, shy, shz, sht = K.shape
-    ACS_mask = np.zeros_like(data, dtype=int)
+    shx, shy, shc, shz, sht = K.shape
+    ACS_mask = np.zeros((shx, shy, shz, sht), dtype=int)
     ACS_mask[:, shy // 2 - 12:shy // 2 + 12, :, :] = 1
 
 
-    ACS_data = ACS_mask * K
+    ACS_data = ACS_mask * np.sqrt(np.sum(K**2, axis=2))
     low_image = ifft2c(ACS_data)
     Casorati = low_image.reshape(shx * shy, shz, sht)
     basis = np.zeros((shz, sht, sht), dtype=complex)
@@ -44,20 +44,20 @@ def temporal_basis(K):
 
 def spatial_basis(X_under, TB, num_workers=os.cpu_count()):
     rcn = ifft2c(X_under)
-    shx, shy, shz, sht = rcn.shape
+    shx, shy, sht, shz = rcn.shape
     basis = np.zeros_like(rcn)
     args = [(x, y, z, rcn, TB) for x in range(shx) for y in range(shy) for z in range(shz)]
     with Pool(processes=num_workers) as p:
         results = p.starmap(fit_basis_at_index, args)
     for r in results:
         x, y, z, B = r
-        basis[x, y, z, :] = B
+        basis[x, y, :, z] = B
 
     return basis
 
 def fit_basis_at_index(x, y, z, rcn, TB):
-    # print("Processing entry", x, y, z, end="\r")
-    X = rcn[x, y, z, :]
+    print("Processing entry", x, y, z, end="\r")
+    X = rcn[x, y, :, z]
     T = TB[z]
     real_lr = linear_model.LinearRegression()
     real_lr.fit(np.real(T), np.real(X))

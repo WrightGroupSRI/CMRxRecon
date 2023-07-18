@@ -1,13 +1,19 @@
 import os
 import json 
-from typing import NamedTuple
+import numpy as np
 
 import torch
 from torch.utils.data import Dataset
 
+
 from cmrxrecon.io import loadmat
 
 class CMR_volume_dataset(Dataset):
+    """Volume dataset for MICCAI challenge. Takes in directory and loads volumes of 
+    spatial basis. For some reason, much faster in numpy saved format so using that now
+    
+    """
+
     def __init__(self, directory:os.PathLike, acc_factor:str = 4, transforms: callable = None, save_metadata = False, meta_data: os.PathLike = ""):
         super().__init__()
         assert acc_factor in [4, 8, 10], 'Acceleration factor should be 4, 8, or 10'
@@ -32,18 +38,24 @@ class CMR_volume_dataset(Dataset):
         else:
             print(f'Counting Volumes')
             for file in self.target_files:
-                # create paths to files
-                target_map_file = os.path.join(target_direcory, file, 'spatial_basis.mat')
-                undersampled_map_file04 = os.path.join(undersampled_directory04, file, 'spatial_basis.mat')
-                undersampled_map_file08 = os.path.join(undersampled_directory08, file, 'spatial_basis.mat')
-                undersampled_map_file10 = os.path.join(undersampled_directory10, file, 'spatial_basis.mat')
 
+                # create paths to files
+                target_map_file = os.path.join(target_direcory, file, 'spatial_basis.npy')
+                undersampled_map_file04 = os.path.join(undersampled_directory04, file, 'spatial_basis.npy')
+                undersampled_map_file08 = os.path.join(undersampled_directory08, file, 'spatial_basis.npy')
+                undersampled_map_file10 = os.path.join(undersampled_directory10, file, 'spatial_basis.npy')
+
+    
                 # load spatial basis
-                spatial_basis_target = loadmat(path=target_map_file, key='spatial_basis')
-                spatial_basis_undersampled = loadmat(path=undersampled_map_file04, key='spatial_basis')
+                if target_map_file.endswith('.mat'):
+                    spatial_basis_target = loadmat(path=target_map_file, key='spatial_basis')
+                elif target_map_file.endswith('.npy'):
+                    spatial_basis_target = np.load(target_map_file)
+                else:
+                    raise ValueError(f'Cannot read extension of type {target_map_file.split(".")[-1]}')
                 _, _, z_slices, _ = spatial_basis_target.shape
 
-                # counting slices
+                # create dictionary of files for a specific sample
                 slice_objects = {
                     'target_fname': target_map_file, 
                     'undersampled_fname_04': undersampled_map_file04, 
@@ -65,7 +77,7 @@ class CMR_volume_dataset(Dataset):
 
     def __getitem__(self, index) -> torch.Tensor:
         file_dict = self.raw_data[index]
-        file_name = file_dict['target_fname']
+        target_fname = file_dict['target_fname']
 
         if self.R == 4:
             undersampled_fname = file_dict['undersampled_fname_04']
@@ -77,8 +89,13 @@ class CMR_volume_dataset(Dataset):
             raise ValueError(f'The acceleartion factor should be 4, 8 or 10 but got {self.R}')
 
         # load data
-        target_basis = loadmat(path=file_name, key='spatial_basis')
-        undersampled_basis = loadmat(path=undersampled_fname, key='spatial_basis')
+        if target_fname.endswith('.npy'):
+            target_basis = np.load(target_fname)
+            undersampled_basis = np.load(undersampled_fname)
+        elif target_fname.endswith('.mat'):
+            target_basis = loadmat(path=target_fname, key='spatial_basis')
+            undersampled_basis = loadmat(path=undersampled_fname, key='spatial_basis')
+
         target_basis = torch.from_numpy(target_basis[:, :, :, :3])
         undersampled_basis = torch.from_numpy(undersampled_basis[:, :, :, :3])
 
@@ -88,4 +105,4 @@ class CMR_volume_dataset(Dataset):
         return (undersampled_basis, target_basis)
 
 if __name__ == '__main__':
-    CMR_volume_dataset('/home/kadotab/projects/def-mchiew/kadotab/cmr_basis/', '04')
+    CMR_volume_dataset('/home/kadotab/projects/def-mchiew/kadotab/cmr_basis/')

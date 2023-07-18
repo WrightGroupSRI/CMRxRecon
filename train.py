@@ -19,6 +19,7 @@ parser.add_argument('--num_workers', type=int, default=1, help='')
 parser.add_argument('--max_epoch', type=int, default=50, help='')
 parser.add_argument('--acceleration', type=int, default=4, help='')
 parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/cmr_basis/', help='')
+parser.add_argument('--residual', action='store_true')
 
 def main():
     print('Training')
@@ -30,7 +31,7 @@ def main():
     # load volume data
     volume_dataset = CMR_volume_dataset(args.data_dir, acc_factor=args.acceleration, save_metadata=True)
 
-    acceleration_factor = 'acc_' + volume_dataset.R
+    acceleration_factor = 'acc_' + str(volume_dataset.R)
     current_date = datetime.now().strftime("%m%d-%H%M")
 
     # split volume dataset into train, test, and validation
@@ -63,10 +64,10 @@ def main():
     # model loop (train loop, validation looop, and plotting slices)
     for epoch in range(args.max_epoch):
         print(f'Starting epoch: {epoch}')
-        loss = train(net, loss_func, train_dataloader, optimizer, device)
+        loss = train(net, loss_func, train_dataloader, optimizer, device, args.residual)
         with torch.no_grad():
-            val_loss = validate(net, loss_func, val_dataloader, device)
-            plot_recon(net, val_dataloader, device, writer, epoch)
+            val_loss = validate(net, loss_func, val_dataloader, device, args.residual)
+            plot_recon(net, val_dataloader, device, writer, epoch, args.residual)
         print(f'Finished epoch: {epoch}, Loss: {loss}, Val Loss: {val_loss}')
 
         writer.add_scalar('train/loss', loss, epoch)
@@ -83,7 +84,14 @@ def main():
     for name, value in metrics.items():
         print(f'Test metrics {name} is {value}')
 
-def train(model: torch.nn.Module, loss_function: callable, dataloader: torch.utils.data.DataLoader, optimizer: torch.optim, device: str):
+def train(
+        model: torch.nn.Module, 
+        loss_function: callable, 
+        dataloader: torch.utils.data.DataLoader, 
+        optimizer: torch.optim,
+        device: str,
+        learn_residual: bool
+    ):
     """ Training loop of model
 
     Args:
@@ -105,8 +113,12 @@ def train(model: torch.nn.Module, loss_function: callable, dataloader: torch.uti
         target_slice = target_slice.to(device)
 
         optimizer.zero_grad()
-        predicted_sampled = model(input_slice)
-        loss = loss_function(input_slice - predicted_sampled, target_slice)
+        predicted = model(input_slice)
+
+        if learn_residual:
+            loss = loss_function(input_slice - predicted, target_slice)
+        else:
+            loss = loss_function(predicted, target_slice)
 
         loss.backward()
         optimizer.step()
@@ -114,7 +126,14 @@ def train(model: torch.nn.Module, loss_function: callable, dataloader: torch.uti
 
     return running_loss/len(dataloader)
 
-def validate(model: torch.nn.Module, loss_function: callable, dataloader: torch.utils.data.DataLoader, device: str):
+def validate(
+        model: 
+        torch.nn.Module, 
+        loss_function: callable, 
+        dataloader: torch.utils.data.DataLoader, 
+        device: str, 
+        learn_residual: bool
+    ):
     """Validation training loop
 
     Args:
@@ -133,8 +152,11 @@ def validate(model: torch.nn.Module, loss_function: callable, dataloader: torch.
         input_slice = input_slice.to(device)
         target_slice = target_slice.to(device)
 
-        predicted_sampled = model(input_slice)
-        loss = loss_function(input_slice - predicted_sampled, target_slice)
+        predicted = model(input_slice)
+        if learn_residual:
+            loss = loss_function(input_slice - predicted, target_slice)
+        else:
+            loss = loss_function(predicted, target_slice)
 
         running_loss += loss.item()*target_slice.shape[0]
 
@@ -160,7 +182,7 @@ def test(model, metrics, dataloader, device):
 
                 
 
-def plot_recon(model, dataloader, device, writer, epoch):
+def plot_recon(model, dataloader, device, writer, epoch, learn_residual):
     """ plots a single slice to tensorboard. Plots reconstruction, ground truth, 
     and error magnified by 4
 
@@ -179,13 +201,16 @@ def plot_recon(model, dataloader, device, writer, epoch):
     target = convert_to_complex(target).to(device)
 
     # gets difference 
-    diff = target - (input - output)
+    if learn_residual:
+        diff = target - (input - output)
+    else:
+        diff = target - output
 
     output = output[[0]].permute((1, 0, 2, 3))
     target = target[[0]].permute((1, 0, 2, 3))
     diff = diff[[0]].permute((1, 0, 2, 3))
 
-    image_scaling_factor = target.abs().max()
+    image_scaling_factor = target.abs().max() * 0.75
     image_scaled = output.abs()/image_scaling_factor
     image_scaled[image_scaled > 1] = 1
 

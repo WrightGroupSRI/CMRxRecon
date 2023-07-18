@@ -28,7 +28,10 @@ def main():
     args = parser.parse_args()
 
     # load volume data
-    volume_dataset = CMR_volume_dataset(args.data_dir, acc_factor=args.acceleration, save_metadata=True, meta_data='/home/kadotab/python/cmr_miccai/CMRxRecon/header.json')
+    volume_dataset = CMR_volume_dataset(args.data_dir, acc_factor=args.acceleration, save_metadata=True)
+
+    acceleration_factor = 'acc_' + volume_dataset.R
+    current_date = datetime.now().strftime("%m%d-%H%M")
 
     # split volume dataset into train, test, and validation
     train_data_volume, val_data_volume, test_data_volume = torch.utils.data.random_split(volume_dataset, [100, 10, 10])
@@ -51,7 +54,9 @@ def main():
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
     loss_func = torch.nn.MSELoss()
 
-    writer_dir = '/home/kadotab/scratch/runs/' + datetime.now().strftime("%m%d-%H%M") + net.__class__.__name__ + '_cmrxrecon'
+    torch.optim.lr_scheduler.StepLR(optimizer, 50, gamma=0.1)
+
+    writer_dir = '/home/kadotab/scratch/runs/' + current_date + net.__class__.__name__ + '_cmrxrecon' + acceleration_factor
     writer = SummaryWriter(writer_dir)
     save_config(args, writer_dir)
 
@@ -68,11 +73,11 @@ def main():
         writer.add_scalar('val/loss', val_loss, epoch)
 
     # save model
-    torch.save(net.state_dict(), model_weight_dir + datetime.now().strftime('%m%d-%H%M') + '.pt')
+    torch.save(net.state_dict(), model_weight_dir + current_date + acceleration_factor + '.pt')
 
     # test metrics
     metrics = {
-        'mean_squared_error': torch.nn.MSELoss()
+        'normalize_mean_squared_error': lambda input, target: (input - target).pow(2).sum()/target.pow(2).sum()
     }
     metrics = test(net, metrics, test_dataloader, device)
     for name, value in metrics.items():
@@ -101,7 +106,7 @@ def train(model: torch.nn.Module, loss_function: callable, dataloader: torch.uti
 
         optimizer.zero_grad()
         predicted_sampled = model(input_slice)
-        loss = loss_function(predicted_sampled, target_slice)
+        loss = loss_function(input_slice - predicted_sampled, target_slice)
 
         loss.backward()
         optimizer.step()
@@ -129,7 +134,7 @@ def validate(model: torch.nn.Module, loss_function: callable, dataloader: torch.
         target_slice = target_slice.to(device)
 
         predicted_sampled = model(input_slice)
-        loss = loss_function(predicted_sampled, target_slice)
+        loss = loss_function(input_slice - predicted_sampled, target_slice)
 
         running_loss += loss.item()*target_slice.shape[0]
 
@@ -155,7 +160,6 @@ def test(model, metrics, dataloader, device):
 
                 
 
-
 def plot_recon(model, dataloader, device, writer, epoch):
     """ plots a single slice to tensorboard. Plots reconstruction, ground truth, 
     and error magnified by 4
@@ -169,31 +173,30 @@ def plot_recon(model, dataloader, device, writer, epoch):
     """
     (input, target, scaling) = next(iter(dataloader))
     output = model(input.to(device))
-    output *= scaling.to(device)[:, None, None, None]
 
     # convert back into complex from batch, basis * 2, height, width
     output = convert_to_complex(output)
-    target = convert_to_complex(target)
+    target = convert_to_complex(target).to(device)
 
     # gets difference 
-    diff = target.to(device) - output
+    diff = target - (input - output)
 
     output = output[[0]].permute((1, 0, 2, 3))
     target = target[[0]].permute((1, 0, 2, 3))
     diff = diff[[0]].permute((1, 0, 2, 3))
 
-    image_scaling_factor = output.abs()
-    image_scaled = output.abs().unsqueeze(0)/image_scaling_factor
+    image_scaling_factor = target.abs().max()
+    image_scaled = output.abs()/image_scaling_factor
     image_scaled[image_scaled > 1] = 1
 
-    diff_scaled = diff.abs().unsqueeze(0)/(image_scaling_factor/4)
+    diff_scaled = diff.abs()/(image_scaling_factor/4)
     diff_scaled[diff_scaled > 1] = 1
 
     writer.add_images('val/recon', image_scaled, epoch)
     writer.add_images('val/diff', diff_scaled, epoch)
 
     if epoch == 0:
-        recon_scaled = target.abs().unsqueeze(0)/image_scaling_factor
+        recon_scaled = target.abs()/image_scaling_factor
         recon_scaled[recon_scaled> 1] = 1
         writer.add_images('val/target', recon_scaled, epoch)
 

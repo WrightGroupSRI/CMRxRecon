@@ -23,7 +23,7 @@ parser.add_argument('--residual', action='store_true')
 
 def main():
     torch.manual_seed(0)
-    
+
     print('Training')
 
     model_weight_dir = '/home/kadotab/python/cmr_miccai/CMRxRecon/model_weights/'
@@ -80,13 +80,7 @@ def main():
     # save model
     torch.save(net.state_dict(), model_weight_dir + current_date + acceleration_factor + '.pt')
 
-    # test metrics
-    metrics = {
-        'normalize_mean_squared_error': lambda input, target: (input - target).pow(2).sum()/target.pow(2).sum()
-    }
-    metrics = test(net, metrics, test_dataloader, device)
-    for name, value in metrics.items():
-        print(f'Test metrics {name} is {value}')
+
 
 def train(
         model: torch.nn.Module, 
@@ -166,23 +160,6 @@ def validate(
 
     return running_loss/len(dataloader)
 
-def test(model, metrics, dataloader, device):
-    computed_metrics = defaultdict(list)
-    with torch.no_grad():
-        for data in dataloader:
-            (input, target, scaling) = data
-            input = input.to(device)
-            target = target.to(device)
-
-            output = model(input)
-            for name, metric in metrics.items():
-                computed_metrics[name].append(metric(target, output))
-        
-        averaged_metrics = {}
-        for metric_names, values in computed_metrics.items():
-            averaged_metrics[metric_names] = sum(values)/len(values)
-
-        return averaged_metrics
 
                 
 

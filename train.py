@@ -22,6 +22,8 @@ parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-
 parser.add_argument('--residual', action='store_true')
 
 def main():
+    torch.manual_seed(0)
+    
     print('Training')
 
     model_weight_dir = '/home/kadotab/python/cmr_miccai/CMRxRecon/model_weights/'

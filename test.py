@@ -12,23 +12,13 @@ from cmrxrecon.dataloader.cmr_volume_dataset import CMR_volume_dataset
 from cmrxrecon.dataloader.cmr_slice_dataset import CMR_slice_dataset
 from cmrxrecon.models.Unet import Unet
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--lr', type=float, default=1e-4, help='')
-parser.add_argument('--batch_size', type=int, default=1, help='')
-parser.add_argument('--max_epochs', type=int, default=50, help='')
-parser.add_argument('--num_workers', type=int, default=1, help='')
-parser.add_argument('--max_epoch', type=int, default=50, help='')
-parser.add_argument('--acceleration', type=int, default=4, help='')
-parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/cmr_basis/', help='')
-parser.add_argument('--residual', action='store_true')
 
 def main():
     torch.manual_seed(0)
 
-    args = parser.parse_args()
     weight_path = '/home/kadotab/python/cmr_miccai/CMRxRecon/model_weights/0719-1155acc_10.pt'
 
-    volume_dataset = CMR_volume_dataset(args.data_dir, acc_factor=args.acceleration, save_metadata=True)
+    volume_dataset = CMR_volume_dataset(args.data_dir, acc_factor=10, save_metadata=True)
 
     # split volume dataset into train, test, and validation. 
     # should be the same as training code since seed is the same
@@ -36,7 +26,7 @@ def main():
    
     test_data = CMR_slice_dataset(test_data_volume)
 
-    test_dataloader = torch.utils.data.DataLoader(test_data, batch_size=args.batch_size, num_workers=args.num_workers)
+    test_dataloader = torch.utils.data.DataLoader(test_data, batch_size=1, num_workers=1)
 
     # U-net 
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'

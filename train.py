@@ -49,10 +49,10 @@ def main():
 
     # U-net 
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-    net = Unet(in_chan=6, out_chan=6, chans=64)
+    net = Unet(in_chan=6, out_chan=6, chans=64, drop_prob=0.25)
     net.to(device)
 
-    optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(net.parameters(), lr=args.lr, weight_decay=0.001)
     loss_func = torch.nn.MSELoss()
 
     torch.optim.lr_scheduler.StepLR(optimizer, 50, gamma=0.1)
@@ -64,7 +64,9 @@ def main():
     # model loop (train loop, validation looop, and plotting slices)
     for epoch in range(args.max_epoch):
         print(f'Starting epoch: {epoch}')
+        net.train()
         loss = train(net, loss_func, train_dataloader, optimizer, device, args.residual)
+        net.eval()
         with torch.no_grad():
             val_loss = validate(net, loss_func, val_dataloader, device, args.residual)
             plot_recon(net, val_dataloader, device, writer, epoch, args.residual)
@@ -199,6 +201,7 @@ def plot_recon(model, dataloader, device, writer, epoch, learn_residual):
     # convert back into complex from batch, basis * 2, height, width
     output = convert_to_complex(output)
     target = convert_to_complex(target).to(device)
+    input = convert_to_complex(input)
 
     # gets difference 
     if learn_residual:
@@ -209,16 +212,22 @@ def plot_recon(model, dataloader, device, writer, epoch, learn_residual):
     output = output[[0]].permute((1, 0, 2, 3))
     target = target[[0]].permute((1, 0, 2, 3))
     diff = diff[[0]].permute((1, 0, 2, 3))
+    input = input[[0]].permute((1, 0, 2, 3))
 
     image_scaling_factor = target.abs().max() * 0.75
+
+    input = input.abs().to(device)/image_scaling_factor
+    input = input.clamp(0, 1)
+
     image_scaled = output.abs()/image_scaling_factor
-    image_scaled[image_scaled > 1] = 1
+    image_scaled = image_scaled.clamp(0, 1)
 
     diff_scaled = diff.abs()/(image_scaling_factor/4)
-    diff_scaled[diff_scaled > 1] = 1
+    diff_scaled = diff_scaled.clamp(0, 1)
 
     writer.add_images('val/recon', image_scaled, epoch)
     writer.add_images('val/diff', diff_scaled, epoch)
+    writer.add_images('val/input', input, epoch)
 
     if epoch == 0:
         recon_scaled = target.abs()/image_scaling_factor

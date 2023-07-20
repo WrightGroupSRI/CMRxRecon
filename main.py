@@ -72,6 +72,7 @@ if __name__ == '__main__':
                 TB = temporal_basis(data) 
                 espirit_recon = espirit(data)
                 SB = spatial_basis(espirit_recon, TB)
+                print(TB.shape, SB.shape)
 
 
             # Export processed data

@@ -51,23 +51,14 @@ def maps(array):
 
 
 # Function for ESPIRiT reconstruction
-def espirit(array, path=None, save_recon= None, contrast= 'T1'):
+def espirit(array, path=None, save_recon= None, iterations=50, contrast= 'T1'):
     maps_,fft_b = maps(array)
     # change to 100 iterations
     # change to add gpu
     # make sure regularizer is doing what we think it is
-    recon_p = bart(1,'pics -e -i 1 -d 5 -R W:6:0:0.05',fft_b,maps_)
+    recon_p = bart(1,f'pics -e -i {iterations} -d 5 -R W:6:0:0.05',fft_b,maps_)
+    return np.transpose(np.squeeze(recon_p), axes=((0, 1, 3, 2)))
     
-    if save_recon==True:
-        if not os.path.exists(f"{path}/"):
-            os.makedirs(f"{path}/")
-        
-        maps_= np.expand_dims(np.squeeze(maps_), axis = -1)
-        recon_p = np.transpose(np.expand_dims(np.squeeze(recon_p), axis = 2), [0,1,2,4,3])
-        write_recon(maps=maps_, espirit= np.flip(recon_p, axis = [0,1]), path=path, contrast=contrast)
-        cfl.writecfl(f"{path}/{contrast}recon_E", np.flip(recon_p, axis = [0,1]))
-      
-    return np.squeeze(recon_p)
  
 
 # Main function

@@ -18,61 +18,31 @@ from multiprocessing import Pool
 import os
 import sys
 from sklearn import linear_model
+import cfl
 
 from matio import loadmat, writemat
 
 import time
 
-__all__ = ['spatial_basis', 'temporal_basis']
+__all__ = ['spatial_temporal_basis', 'outer_product']
 
-def temporal_basis(K):
-    shx, shy, shc, shz, sht = K.shape
-    ACS_mask = np.zeros((shx, shy, shz, sht), dtype=int)
-    ACS_mask[:, shy // 2 - 12:shy // 2 + 12, :, :] = 1
+def norm(a):
+    return (a - np.min(a)) / (np.max(a) - np.min(a))
 
+def spatial_temporal_basis(X, L=3):
+    shx, shy, shz, sht = X.shape
 
-    ACS_data = ACS_mask * np.sqrt(np.sum(K**2, axis=2))
-    low_image = ifft2c(ACS_data)
-    Casorati = low_image.reshape(shx * shy, shz, sht)
-    basis = np.zeros((shz, sht, sht), dtype=complex)
+    Casorati = X.reshape(shx * shy, shz, sht)
+    temporal_basis = np.zeros((shz, sht, L), dtype=complex)
+    spatial_basis = np.zeros((shx, shy, shz, L), dtype=complex)
+    Svals = np.zeros((shz, L))
 
     for z in range(shz):
         U, S, VH = np.linalg.svd(Casorati[:, z, :], full_matrices=False)
-        basis[z, :, :] = VH
-
-    return basis
-
-def spatial_basis(X_under, TB, num_workers=os.cpu_count()):
-    rcn = ifft2c(X_under)
-    shx, shy, sht, shz = rcn.shape
-    basis = np.zeros_like(rcn)
-    args = [(x, y, z, rcn, TB) for x in range(shx) for y in range(shy) for z in range(shz)]
-    with Pool(processes=num_workers) as p:
-        results = p.starmap(fit_basis_at_index, args)
-    for r in results:
-        x, y, z, B = r
-        basis[x, y, :, z] = B
-
-    return basis
-
-def fit_basis_at_index(x, y, z, rcn, TB):
-    print("Processing entry", x, y, z, end="\r")
-    X = rcn[x, y, :, z]
-    T = TB[z]
-    real_lr = linear_model.LinearRegression()
-    real_lr.fit(np.real(T), np.real(X))
-    imag_lr = linear_model.LinearRegression()
-    imag_lr.fit(np.imag(T), np.imag(X))
-    return (x, y, z, real_lr.coef_ + 1j * imag_lr.coef_)
-
-def write_basis(spatial_basis=None, temporal_basis=None, path=None, contrast="T1"):
-    out = {}
-    out["spatial_basis"] = spatial_basis 
-    out["temporal_basis"] = temporal_basis
-    writemat(key="spatial_basis", data=spatial_basis, path=os.path.join(path, "spatial_basis.mat"))
-    writemat(key="temporal_basis", data=temporal_basis, path=os.path.join(path, "temporal_basis.mat"))
-    return True
-
+        spatial_basis[:, :, z, :] = U.reshape((shx, shy, sht))[:, :, :L]
+        temporal_basis[z, :, :] = VH.T[:, :L]
+        Svals[z, :] = S[:L]
+    return spatial_basis, Svals, temporal_basis
 
 def ifft2c(x):
     # 获取 x 的 shape
@@ -96,27 +66,37 @@ def ifft2c(x):
 
     return res
 
-def outer_product(SB, TB):
-    out = np.zeros((SB.shape[0], SB.shape[1], SB.shape[-1]))
-    for i in range(SB.shape[-1]):
-        out[:, :, i] = np.einsum('ijk,nk', SB[..., i], TB[i])
-    return out
+def outer_product(SB, Svals, TB):
+    SB_Cas = SB.reshape(SB.shape[0] * SB.shape[1], SB.shape[2], SB.shape[3])
+    out = np.zeros((SB.shape[0], SB.shape[1], SB.shape[2], TB.shape[1]), dtype=complex)
+    print(SB_Cas.shape, Svals.shape, TB.shape)
+    for z in range(SB.shape[2]):
+        arr = SB_Cas[:, z, :] @ np.diag(Svals[z]) @ TB[z].T
+        out[:, :, z, :] = arr.reshape(SB.shape[0], SB.shape[1], TB.shape[1])
+    return out 
 
 if __name__ == '__main__':
     print("Running basis computation")
-    fully_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
-    data = loadmat(key='kspace_single_full', path=fully_sampled_path)
+    fully_sampled_path = "/hdd/Data/CMRxRecon/MultiCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
+    under_sampled_path = "/hdd/Data/CMRxRecon/MultiCoil/Mapping/TrainingSet/AccFactor04/P001/T1map.mat"
+
+    data = loadmat(key='kspace_full', path=fully_sampled_path)
+    # data = loadmat(key='kspace_sub04', path=under_sampled_path)
 
     fft_recon = ifft2c(data)
+    fft_recon_sos = np.sqrt(np.sum(fft_recon**2, axis=2))
+    SB, Svals, TB = spatial_temporal_basis(fft_recon_sos, L=3)
+    cfl.writecfl("fft_recon", fft_recon_sos)
+    cfl.writecfl("SB", SB)
 
-    under_sampled_path = "/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/AccFactor04/P001/T1map.mat"
-    under_data = loadmat(key='kspace_single_sub04', path=under_sampled_path)
+    # SB_full = spatial_basis(fft_recon_sos, TB_full)
+    # cfl.writecfl("SB_full_svals", SB_full)
 
-    TB = temporal_basis(under_data)
+    # out = outer_product(SB_full, TB_full)
+    # cfl.writecfl("outer_product_svals", out)
 
-    SB = spatial_basis(under_data, TB)
-    SB_full = spatial_basis(data, TB)
+    op = outer_product(SB, Svals, TB)
+    cfl.writecfl("outer_product", op)
 
-    write_basis(spatial_basis=SB, temporal_basis=TB, path="/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/AccFactor04/P001/")
-    write_basis(spatial_basis=SB_full, temporal_basis=TB, path="/hdd/Data/CMRxRecon/SingleCoil/Mapping/TrainingSet/FullSample/P001/") 
+
 

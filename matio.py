@@ -19,10 +19,12 @@ import numpy as np
 __all__ = ['loadmat', 'writemat']
 
 def loadmat(key=None, path=None):
-    assert(key), "Please pass in key"
-    assert(path), "Please pass in path"
+    assert(path), "Please pass in filepath"
     with h5py.File(path) as f:
-        data = f[key]
+        if key:
+            data = f[key]
+        else:
+            print(f.keys())
         ndim = data.ndim
         data = np.transpose(data, np.arange(ndim-1, -1, -1))
         data = data['real'] + 1j * data['imag']

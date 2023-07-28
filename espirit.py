@@ -13,6 +13,7 @@
 from pyforest import *
 from bart import bart
 import scipy.io
+import time
 import cfl
 
 from matio import loadmat, writemat
@@ -43,7 +44,7 @@ def maps(array):
     m_ = np.zeros([1,sh_[0],sh_[1],sh_[2],sh_[3]], dtype=np.complex_)
     for i in range(0,sh_[-2]):
         # change to add gpu
-        m_[...,i] = bart(1, 'ecalib -d3 -S -m1 -a -r1:48:9', fft_b[...,i])
+        m_[...,i] = bart(1, 'ecalib -S -m1 -a -r1:48:9', fft_b[...,i])
     maps_ = prep_bart(np.transpose(m_, [1,2,3,4,0]))
     
   
@@ -52,11 +53,17 @@ def maps(array):
 
 # Function for ESPIRiT reconstruction
 def espirit(array, path=None, save_recon= None, iterations=50, contrast= 'T1'):
+    before = time.time()
     maps_,fft_b = maps(array)
+    after = time.time()
+    print("Maps calculation", after - before)
     # change to 100 iterations
     # change to add gpu
     # make sure regularizer is doing what we think it is
-    recon_p = bart(1,f'pics -e -i {iterations} -d 5 -R W:6:0:0.05',fft_b,maps_)
+    before = time.time()
+    recon_p = bart(1,f'pics -e -i {iterations} -R W:6:0:0.05',fft_b,maps_)
+    after = time.time()
+    print("ESPIRIT", after - before)
     return np.transpose(np.squeeze(recon_p), axes=((0, 1, 3, 2)))
     
  

@@ -15,6 +15,7 @@ import shutil
 import argparse
 import cfl
 import matplotlib.pyplot as plt
+import time
 
 from matio import *
 from basis import *
@@ -43,9 +44,9 @@ if __name__ == '__main__':
 
     multicoil = try_dir(os.path.join(pred_dir, "MultiCoil"))
     mapping = try_dir(os.path.join(multicoil, "Mapping"))
-    validation = try_dir(os.path.join(mapping, "ValidationSet"))
+    validation = try_dir(os.path.join(mapping, "TrainingSet"))
 
-    data_dir = os.path.join(args.input_dir, "MultiCoil", "Mapping", "ValidationSet")
+    data_dir = os.path.join(args.input_dir, "MultiCoil", "Mapping", "TrainingSet")
 
     for a in ['04', '08', '10']:
         acc_factor = f'AccFactor{a}'
@@ -69,11 +70,20 @@ if __name__ == '__main__':
 
             # Process T1 map, T2 map
             for path in [T1map]:#, T2map]:
+                print(path)
                 data = loadmat(key=f'kspace_sub{a}', path=path)
-                espirit_recon = espirit(data, iterations=50)
+                espirit_recon = espirit(data, iterations=100)
+                before = time.time()
                 SB, Svals, TB = spatial_temporal_basis(espirit_recon, L=3)
+                after = time.time()
+                print("Basis fitting", after - before)
                 # SB_proc = UNET(SB) 
                 imgs = outer_product(SB, Svals, TB)
+
+                cfl.writecfl(f"espirit_recon_acc_{a}", espirit_recon)
+                cfl.writecfl(f"outer_product_acc_{a}", imgs)
+                cfl.writecfl(f"SB_acc_{a}", SB)
+                cfl.writecfl(f"TB_acc_{a}", TB)
 
 
             # Export processed data
@@ -84,7 +94,7 @@ if __name__ == '__main__':
             break
 
         # remove when we want to process all acceleration factors
-        break
+        # break
 
 
 

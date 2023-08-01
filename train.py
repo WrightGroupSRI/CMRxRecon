@@ -10,6 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 from cmrxrecon.dataloader.cmr_volume_dataset import CMR_volume_dataset
 from cmrxrecon.dataloader.cmr_slice_dataset import CMR_slice_dataset
 from cmrxrecon.models.Unet import Unet
+from cmrxrecon.losses import SSIMLoss
 
 parser = argparse.ArgumentParser(description='Varnet self supervised trainer')
 parser.add_argument('--lr', type=float, default=1e-4, help='')
@@ -18,7 +19,7 @@ parser.add_argument('--max_epochs', type=int, default=50, help='')
 parser.add_argument('--num_workers', type=int, default=1, help='')
 parser.add_argument('--max_epoch', type=int, default=50, help='')
 parser.add_argument('--acceleration', type=int, default=4, help='')
-parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/cmr_basis/', help='')
+parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/SpatialBasisNumpy/MultiCoil/Mapping/TrainingSet/', help='')
 parser.add_argument('--residual', action='store_true')
 
 def main():
@@ -55,7 +56,8 @@ def main():
     net.to(device)
 
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr, weight_decay=0.001)
-    loss_func = torch.nn.MSELoss()
+    #loss_func = torch.nn.MSELoss()
+    loss_func = SSIMLoss().to(device)
 
     torch.optim.lr_scheduler.StepLR(optimizer, 50, gamma=0.1)
 
@@ -116,7 +118,7 @@ def train(
         if learn_residual:
             loss = loss_function(input_slice - predicted, target_slice)
         else:
-            loss = loss_function(predicted, target_slice)
+            loss = loss_function(predicted, target_slice, target_slice.amax((1, 2, 3)))
 
         loss.backward()
         optimizer.step()
@@ -154,7 +156,7 @@ def validate(
         if learn_residual:
             loss = loss_function(input_slice - predicted, target_slice)
         else:
-            loss = loss_function(predicted, target_slice)
+            loss = loss_function(predicted, target_slice, target_slice.amax((1, 2, 3)) - target_slice.amin((1, 2, 3)))
 
         running_loss += loss.item()*target_slice.shape[0]
 
@@ -193,7 +195,7 @@ def plot_recon(model, dataloader, device, writer, epoch, learn_residual):
     diff = diff[[0]].permute((1, 0, 2, 3))
     input = input[[0]].permute((1, 0, 2, 3))
 
-    image_scaling_factor = target.abs().max() * 0.75
+    image_scaling_factor = output.abs().max() * 0.55
 
     input = input.abs().to(device)/image_scaling_factor
     input = input.clamp(0, 1)

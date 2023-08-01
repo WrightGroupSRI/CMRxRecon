@@ -77,8 +77,8 @@ def outer_product(SB, Svals, TB):
 
 if __name__ == '__main__':
     print("Running basis computation")
-    fully_sampled_path = "/hdd/Data/CMRxRecon/MultiCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
-    under_sampled_path = "/hdd/Data/CMRxRecon/MultiCoil/Mapping/TrainingSet/AccFactor04/P001/T1map.mat"
+    fully_sampled_path = "/home/kadotab/projects/def-mchiew/kadotab/SpatialBasisNumpy/MultiCoil/Mapping/TrainingSet/FullSample/P001/T1map.mat"
+    under_sampled_path = "/home/kadotab/projects/def-mchiew/kadotab/SpatialBasisNumpy/MultiCoil/Mapping/TrainingSet/AccFactor04/P001/T1map.mat"
 
     data = loadmat(key='kspace_full', path=fully_sampled_path)
     # data = loadmat(key='kspace_sub04', path=under_sampled_path)

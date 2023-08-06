@@ -25,8 +25,8 @@ class CMR_slice_dataset(Dataset):
                 slices.append(volume['slices'])
             self.slice_cumlative_sum = np.cumsum(slices)
         else:
-            for volume in self.cmr_volume_loader.raw_data:
-                slices.append(volume['slices'])
+            for volume in range(len(self.cmr_volume_loader)):
+                slices.append(self.cmr_volume_loader[volume][0].shape[2])
 
             self.slice_cumlative_sum = np.cumsum(slices)
     
@@ -43,13 +43,13 @@ class CMR_slice_dataset(Dataset):
             slice_index = index - self.slice_cumlative_sum[volume_index - 1] 
         else: 
             slice_index = index
-        
-        (undersampled_basis, target_basis) = self.cmr_volume_loader[volume_index]
 
+        # load volume and get slice 
+        undersampled_basis, target_basis = self.cmr_volume_loader[volume_index]
         undersampled_basis = undersampled_basis[:, :, slice_index, :]
         target_basis = target_basis[:, :, slice_index, :]
 
-        # convert to real
+        # convert to real shape is now basis, height, width
         height, width, basis = undersampled_basis.shape
         undersampled_basis = torch.view_as_real(undersampled_basis).reshape((height, width, basis*2)).permute(2, 0, 1)
         target_basis = torch.view_as_real(target_basis).reshape((height, width, basis*2)).permute(2, 0, 1)
@@ -60,19 +60,14 @@ class CMR_slice_dataset(Dataset):
 
         # normalize to 0-1
         # TODO: Test if normalizing to mean 0 std 1 is better. Test if gloabl or local noralization is better
-        scaling_factor = undersampled_basis.abs().max()
-        undersampled_basis /= scaling_factor
-        target_basis /= scaling_factor
-
-        #scaling_mean = undersampled_basis.mean((1, 2)).unsqueeze(-1).unsqueeze(-1)
-        #scaling_std = undersampled_basis.std((1, 2)).unsqueeze(-1).unsqueeze(-1)
-        #undersampled_basis = (undersampled_basis - scaling_mean)/scaling_std
-        #target_basis = (target_basis - scaling_mean)/scaling_std
-
+        #scaling_factor = undersampled_basis.abs().max()
+        #undersampled_basis /= scaling_factor
+        #target_basis /= scaling_factor
+        
         assert not undersampled_basis.isnan().any()
         assert not target_basis.isnan().any()
 
-        data = (undersampled_basis, target_basis, scaling_factor)
+        data = (undersampled_basis, target_basis)
              
         if self.transforms:
             data = self.transforms(data)

@@ -16,10 +16,16 @@ import argparse
 import cfl
 import matplotlib.pyplot as plt
 import time
+import numpy as np
+import torch
 
 from matio import *
 from basis import *
 from espirit import *
+from cmrxrecon.models.Unet import Unet
+from cmrxrecon.transforms import normalize, unnormalize, convert_to_real, phase_to_zero, center_crop
+from cmrxrecon.utils import crop_or_pad_to_size, convert_to_complex_batch, rephase
+from save_images import pass_model
 
 def try_dir(path):
     if not os.path.exists(path):
@@ -47,6 +53,23 @@ if __name__ == '__main__':
     validation = try_dir(os.path.join(mapping, "TrainingSet"))
 
     data_dir = os.path.join(args.input_dir, "MultiCoil", "Mapping", "TrainingSet")
+
+    
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    net = Unet(in_chan=6, out_chan=6, chans=64)
+    net.to(device)
+    net.load_state_dict(torch.load(weight_path, map_location=torch.device('cpu')))
+    net.eval()
+
+    # normalization performed before 
+    norm = normalize(
+        mean_input = torch.tensor([-3.7636e-06,  6.0398e-06,  5.1053e-06, -9.0448e-06,  5.2411e-06, 2.2193e-06]),
+        std_input = torch.tensor([0.0026, 0.0026, 0.0026, 0.0026, 0.0026, 0.0026]),
+    )
+    unnorm = unnormalize(
+        mean = torch.tensor([ 5.0149e-06, -4.1653e-06,  7.0542e-06, -7.9898e-06,  5.7021e-06, -4.0155e-06]).to(device),
+        std = torch.tensor([0.0026, 0.0026, 0.0026, 0.0026, 0.0026, 0.0026].to(device)),
+    )
 
     for a in ['04', '08', '10']:
         acc_factor = f'AccFactor{a}'
@@ -77,7 +100,18 @@ if __name__ == '__main__':
                 SB, Svals, TB = spatial_temporal_basis(espirit_recon, L=3)
                 after = time.time()
                 print("Basis fitting", after - before)
-                # SB_proc = UNET(SB) 
+
+                before = time.time()
+                print(f'Model inference')
+                SB_output_volume = np.zeros_like(SB)
+                for slice_index in range(SB.shape[2]):
+                    SB_slice = SB[:, :, slice_index, :]
+                    SB_output = pass_model(net, norm, unnorm, device, SB_slice) 
+                    SB_output_volume[:, :, slice_index, :] = SB_output.squeeze(0)
+
+                print(f'Model inference done: {time.time() - before}')
+
+                SB = SB_output_volume
                 imgs = outer_product(SB, Svals, TB)
 
                 cfl.writecfl(f"espirit_recon_acc_{a}", espirit_recon)

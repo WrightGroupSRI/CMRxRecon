@@ -7,12 +7,13 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 from typing import Callable 
 from torch.utils.tensorboard import SummaryWriter
+from torchvision.transforms import Compose
 
 from cmrxrecon.dataloader.cmr_volume_dataset import CMR_volume_dataset
 from cmrxrecon.dataloader.cmr_slice_dataset import CMR_slice_dataset
 from cmrxrecon.dataloader.cmr_all_acceleration import All_Acceleration
 from cmrxrecon.dataloader.cmr_all_modalities import All_Modalities
-from cmrxrecon.transforms import normalize
+from cmrxrecon.transforms import normalize, phase_to_zero, crop, convert_to_real_transform
 from cmrxrecon.models.Unet import Unet
 from cmrxrecon.losses import SSIMLoss
 
@@ -20,7 +21,7 @@ from cmrxrecon.losses import SSIMLoss
 def main():
     torch.manual_seed(0)
     data_dir = '/home/kadotab/projects/def-mchiew/kadotab/SpatialBasisNumpy/MultiCoil/Mapping/TrainingSet/'
-    weight_path = '/home/kadotab/scratch/runs/0804-23:09:08Unet_cmrxreconacc_10/model_weights/174.pt'
+    weight_path = '/home/kadotab/scratch/runs/0821-13:33:15Unet_cmrxreconacc_10/model_weights/end.pt'
     acceleration_factor = '10'
     modality = 'T1'
     residual = True
@@ -30,8 +31,8 @@ def main():
     # split volume dataset into train, test, and validation. 
     # should be the same as training code since seed is the same
     _, _, test_data_volume = torch.utils.data.random_split(volume_dataset, [100, 10, 10])
-    test_data_volume = All_Acceleration(test_data_volume)
-    test_data_volume = All_Modalities(test_data_volume)
+    #test_data_volume = All_Acceleration(test_data_volume)
+    #test_data_volume = All_Modalities(test_data_volume)
    
     if modality == 'T1':
         norm = normalize(
@@ -47,9 +48,9 @@ def main():
             mean_target = torch.tensor([-6.7997e-06,  3.4939e-06,  9.6027e-06,  6.1829e-06,  5.9974e-06, 6.6375e-06]),
             std_target = torch.tensor([0.0033, 0.0034, 0.0033, 0.0034, 0.0033, 0.0033]),
         )
-    test_data = CMR_slice_dataset(test_data_volume, transforms=norm)
+    test_data = CMR_slice_dataset(test_data_volume, transforms=Compose([crop(128), convert_to_real_transform(),phase_to_zero(), norm]))
 
-    test_dataloader = torch.utils.data.DataLoader(test_data, batch_size=1, num_workers=1)
+    test_dataloader = torch.utils.data.DataLoader(test_data, batch_size=1, num_workers=1, shuffle=True)
 
     # U-net 
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -84,10 +85,12 @@ def plot_recon(model, dataloader, device, learn_residual):
     """
     (input, target) = next(iter(dataloader))
     input = input.to(device)
+    input = input.float()
+    target = target.float()
     target = target.to(device)
     output = model(input)
 
-    image_scaling_factor = target[0].max()*2
+    image_scaling_factor = target[0].max()
 
     # gets difference 
     if learn_residual:
@@ -98,15 +101,15 @@ def plot_recon(model, dataloader, device, learn_residual):
 
     input_real = prepare_image(input, image_scaling_factor)
     output_real = prepare_image(output, image_scaling_factor)
-    diff_real = prepare_image(diff.abs(), scaling_factor=image_scaling_factor)
+    diff_real = prepare_image(diff.abs(), scaling_factor=image_scaling_factor/10)
     target_real = prepare_image(target, scaling_factor=image_scaling_factor)
-    plt.imshow(output_real)
+    plt.imshow(output_real, cmap='gray', vmax=1)
     plt.savefig('output_real')
-    plt.imshow(diff_real)
+    plt.imshow(diff_real, cmap='gray', vmax=1)
     plt.savefig('diff_real')
-    plt.imshow(input_real)
+    plt.imshow(input_real, cmap='gray', vmax=1)
     plt.savefig('input_real')
-    plt.imshow(target_real)
+    plt.imshow(target_real, cmap='gray', vmax=1)
     plt.savefig('target_real')
 
     # convert back into complex from batch, basis * 2, height, width
@@ -115,20 +118,22 @@ def plot_recon(model, dataloader, device, learn_residual):
     input = convert_to_complex(input)
     diff = convert_to_complex(diff)
 
-    image_scaling_factor = target[0].abs().max()
+    image_scaling_factor = target[0].abs().max()/2
     input = prepare_image(input, image_scaling_factor)
     output = prepare_image(output, image_scaling_factor)
-    diff = prepare_image(diff, scaling_factor=image_scaling_factor)
+    diff = prepare_image(diff, scaling_factor=image_scaling_factor/10)
     target = prepare_image(target, scaling_factor=image_scaling_factor)
 
-    plt.imshow(output.abs())
+    plt.imshow(output.abs(), cmap='gray', vmax=1)
     plt.savefig('output')
-    plt.imshow(diff.abs())
+    plt.imshow(diff.abs(), cmap='gray', vmax=1)
     plt.savefig('diff')
-    plt.imshow(input.abs())
+    plt.imshow(input.abs(), cmap='gray', vmax=1)
     plt.savefig('input')
-    plt.imshow(target.abs())
+    plt.imshow(target.abs(), cmap='gray', vmax=1)
     plt.savefig('target')
+    plt.imshow((output - input).abs(), cmap='gray', vmax=0.25)
+    plt.savefig('model_difference')
 
 def prepare_image(image, scaling_factor):
     # get first image from batch
@@ -171,12 +176,18 @@ def test(model, metrics, dataloader, device, residual):
     with torch.no_grad():
         for data in dataloader:
             (input, target) = data
-            input = input.to(device)
-            target = target.to(device)
+            input = input.to(device).float()
+            target = target.to(device).float()
 
             output = model(input)
+
             if residual:
                 output = input + output
+
+            output = convert_to_complex(output).abs()
+            target = convert_to_complex(target).abs()
+            input = convert_to_complex(input).abs()
+
             for name, metric in metrics.items():
                 computed_metrics[name].append(metric(target, output))
                 computed_metrics_default[name].append(metric(target, input))

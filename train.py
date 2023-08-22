@@ -15,9 +15,10 @@ from cmrxrecon.dataloader.cmr_all_acceleration import All_Acceleration
 from cmrxrecon.dataloader.cmr_all_modalities import All_Modalities
 from cmrxrecon.collate_function import collate_function
 from cmrxrecon.models.Unet import Unet
+from cmrxrecon.utils import convert_to_complex_batch
 #from cmrxrecon.models.fastmri_unet import Unet
-from cmrxrecon.losses import SSIMLoss, NormL1L2Loss, L1L2Loss
-from cmrxrecon.transforms import normalize, normalize_sample, log_transform
+from cmrxrecon.losses import SSIMLoss, NormL1L2Loss, L1L2Loss, SSIM_L1
+from cmrxrecon.transforms import normalize, normalize_sample, phase_to_zero, crop 
 
 parser = argparse.ArgumentParser(description='Varnet self supervised trainer')
 parser.add_argument('--lr', type=float, default=1e-3, help='')
@@ -28,7 +29,7 @@ parser.add_argument('--max_epoch', type=int, default=50, help='')
 parser.add_argument('--acceleration', choices=['4', '8', '10'], default='10', help='')
 parser.add_argument('--data_dir', type=str, default='/home/kadotab/projects/def-mchiew/kadotab/SpatialBasisNumpy/MultiCoil/Mapping/TrainingSet/', help='')
 parser.add_argument('--residual', action='store_true')
-parser.add_argument('--loss', choices=['mse', 'l1', 'l1l2', 'norml1l2', 'ssim'], default='mse')
+parser.add_argument('--loss', choices=['mse', 'l1', 'l1l2', 'ssim_l1', 'norml1l2', 'ssim'], default='mse')
 parser.add_argument('--channels', type=int, default=64)
 parser.add_argument('--depth', type=int, default=4)
 parser.add_argument('--dropout', type=float, default=0)
@@ -57,22 +58,28 @@ def main():
 
     # split volume dataset into train, test, and validation
 
-    if args.modality == 'T1':
-        norm = normalize(
-            mean_input = torch.tensor([-3.7636e-06,  6.0398e-06,  5.1053e-06, -9.0448e-06,  5.2411e-06, 2.2193e-06]),
-            std_input = torch.tensor([0.0026, 0.0026, 0.0026, 0.0026, 0.0026, 0.0026]),
-            mean_target = torch.tensor([ 5.0149e-06, -4.1653e-06,  7.0542e-06, -7.9898e-06,  5.7021e-06, -4.0155e-06]),
-            std_target = torch.tensor([0.0026, 0.0026, 0.0026, 0.0026, 0.0026, 0.0026]),
-        )
-    elif args.modality == 'T2':
-        norm = normalize(
-            mean_input = torch.tensor([-1.0567e-05,  1.3736e-06,  2.3782e-05, -5.6344e-06,  9.0941e-06, -3.1390e-06]),
-            std_input = torch.tensor([0.0033, 0.0034, 0.0033, 0.0034, 0.0033, 0.0033]),
-            mean_target = torch.tensor([-6.7997e-06,  3.4939e-06,  9.6027e-06,  6.1829e-06,  5.9974e-06, 6.6375e-06]),
-            std_target = torch.tensor([0.0033, 0.0034, 0.0033, 0.0034, 0.0033, 0.0033]),
-        )
+    #if args.modality == 'T1':
+    #    norm = normalize(
+    #        mean_input = torch.tensor([-3.7636e-06,  6.0398e-06,  5.1053e-06, -9.0448e-06,  5.2411e-06, 2.2193e-06]),
+    #        std_input = torch.tensor([0.0026, 0.0026, 0.0026, 0.0026, 0.0026, 0.0026]),
+    #        mean_target = torch.tensor([ 5.0149e-06, -4.1653e-06,  7.0542e-06, -7.9898e-06,  5.7021e-06, -4.0155e-06]),
+    #        std_target = torch.tensor([0.0026, 0.0026, 0.0026, 0.0026, 0.0026, 0.0026]),
+    #    )
+    #elif args.modality == 'T2':
+    #    norm = normalize(
+    #        mean_input = torch.tensor([-1.0567e-05,  1.3736e-06,  2.3782e-05, -5.6344e-06,  9.0941e-06, -3.1390e-06]),
+    #        std_input = torch.tensor([0.0033, 0.0034, 0.0033, 0.0034, 0.0033, 0.0033]),
+    #        mean_target = torch.tensor([-6.7997e-06,  3.4939e-06,  9.6027e-06,  6.1829e-06,  5.9974e-06, 6.6375e-06]),
+    #        std_target = torch.tensor([0.0033, 0.0034, 0.0033, 0.0034, 0.0033, 0.0033]),
+    #    )
+    norm = normalize(
+        mean_input=torch.tensor([0.0020, 0.0020, 0.0019]),
+        mean_target=torch.tensor([0.0020, 0.0020, 0.0019]),
+        std_target=torch.tensor([0.0037, 0.0037, 0.0038]), 
+        std_input=torch.tensor([0.0037, 0.0037, 0.0038]),
+    )
 
-    transforms = Compose([norm])
+    transforms = Compose([norm, crop(128)])
 
     # convert volume dataset into slice datasets
     train_data = CMR_slice_dataset(train_volume, transforms=transforms)
@@ -93,13 +100,14 @@ def main():
 
     # U-net 
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-    net = Unet(in_chan=6, out_chan=6, chans=args.channels, depth=args.depth, drop_prob=args.dropout)
+    net = Unet(in_chan=3, out_chan=3, chans=args.channels, depth=args.depth, drop_prob=args.dropout)
     net.to(device)
 
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
-    #scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1e-3, max_lr=5e-3, step_size_up=200, cycle_momentum=False)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, gamma=0.1, step_size=100*int(len(train_data)/args.batch_size))
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=len(train_dataloader), T_mult=2, eta_min=0)
+    #scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1e-2, max_lr=5e-3, step_size_up=200, cycle_momentum=False)
+    #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, gamma=0.1, step_size=100*int(len(train_data)/args.batch_size))
     
     if args.loss == 'mse':
         loss_func = torch.nn.MSELoss()
@@ -111,6 +119,8 @@ def main():
         loss_func = torch.nn.L1Loss()
     elif args.loss == 'ssim':
         loss_func = SSIMLoss().to(device)
+    elif args.loss == 'ssim_l1':
+        loss_func = SSIM_L1(1).to(device)
 
 
     current_date = datetime.now().strftime("%m%d-%H:%M:%S")
@@ -135,6 +145,7 @@ def main():
 
         writer.add_scalar('train/loss', loss, epoch)
         writer.add_scalar('val/loss', val_loss, epoch)
+        writer.add_scalar('lr', scheduler.get_last_lr[0], epoch)
         if epoch % 25 == 24:
             torch.save(net.state_dict(), os.path.join(weight_dir, str(epoch + 1) + '.pt'))
 
@@ -171,6 +182,8 @@ def train(
 
     for i, data in enumerate(dataloader):
         (input_slice, target_slice) = data
+        input_slice = input_slice.abs().float()
+        target_slice = target_slice.abs().float()
         input_slice = input_slice.to(device)
         target_slice = target_slice.to(device)
 
@@ -185,7 +198,7 @@ def train(
         loss.backward()
         optimizer.step()
         if scheduler:
-            scheduler.step(i + epoch * len(dataloader))
+            scheduler.step()
         running_loss += loss.item()*target_slice.shape[0]
 
     return running_loss/len(dataloader)
@@ -213,6 +226,8 @@ def validate(
 
     for i, data in enumerate(dataloader):
         (input_slice, target_slice) = data
+        input_slice = input_slice.abs().float()
+        target_slice = target_slice.abs().float()
         input_slice = input_slice.to(device)
         target_slice = target_slice.to(device)
 
@@ -264,10 +279,10 @@ def plot_recon(model, dataloader, device, writer, epoch, learn_residual, plot_ty
     writer.add_images(plot_type + '_real_images/target', target_real, epoch)
 
     # convert back into complex from batch, basis * 2, height, width
-    output = convert_to_complex(output)
-    target = convert_to_complex(target)
-    input = convert_to_complex(input)
-    diff = convert_to_complex(diff)
+    output = convert_to_complex_batch(output)
+    target = convert_to_complex_batch(target)
+    input = convert_to_complex_batch(input)
+    diff = convert_to_complex_batch(diff)
 
     image_scaling_factor = target[0].abs().max()
     input = prepare_image(input, image_scaling_factor)
@@ -296,22 +311,6 @@ def prepare_image(image, scaling_factor):
     #image = image.clamp(0, 1)
     return image
 
-def convert_to_complex(output):
-    """ converts real numbers to complex numbers. Divides the number of channels by half, 
-    where half is real numbers and half are complex numbers
-
-    Args:
-        output (Tensor(real)): Real tensor to change to complex
-
-    Returns:
-        Tensor(complex) : Complex tensor
-    """
-    batch, channel, height, width = output.shape
-    assert channel % 2 == 0, "should be able to divide channel by 2"
-    complex = 2
-    output = output.reshape(batch, channel//2, complex, height, width).permute(0, 1, 3, 4, 2).contiguous()
-    output = torch.view_as_complex(output)
-    return output
 
 def save_config(args, writer_dir):
     args_dict = vars(args)

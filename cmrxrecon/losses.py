@@ -40,7 +40,7 @@ class SSIMLoss(nn.Module):
         for chan in range(X.shape[1]):
             x_chan = X[:, [chan], :, :]
             y_chan = Y[:, [chan], :, :]
-            cur_range = y_chan.amax((1, 2, 3)) - y_chan.amin((1, 2, 3))
+            cur_range = torch.max(y_chan.amax((1, 2, 3)) - y_chan.amin((1, 2, 3)), x_chan.amax((1, 2, 3)) - x_chan.amin((1, 2, 3)))
             C1 = ((self.k1 * cur_range) ** 2)[:, None, None, None]
             C2 = ((self.k2 * cur_range) ** 2)[:, None, None, None]
             ux = F.conv2d(x_chan, self.w)  # typing: ignore
@@ -80,6 +80,17 @@ class L1L2Loss(nn.Module):
 
     def forward(self, X, Y):
         return self.l2_loss(X, Y) + self.l1_loss(X, Y)
+
+class SSIM_L1(nn.Module):
+    def __init__(self, gamma) -> None:
+        super().__init__()
+        self.ssim = SSIMLoss()
+        self.l1_loss = torch.nn.L1Loss()
+        self.gamma = gamma
+        pass
+
+    def forward(self, X, Y):
+        return self.ssim(X, Y) * self.gamma + self.l1_loss(X, Y)
 
 
 

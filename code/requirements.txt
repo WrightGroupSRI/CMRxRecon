@@ -1,0 +1,6 @@
+numpy
+scipy
+torch
+tensorboard
+torchvision
+hdf5storage
